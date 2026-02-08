@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import jwt, { type SignOptions } from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import { User } from '../user/User.model';
 
 const signToken = (id: string): string => {
@@ -11,9 +12,20 @@ const signToken = (id: string): string => {
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password, name } = req.body as { email?: string; password?: string; name?: string };
+    const { email, password, username, phone, role_id, tenant_id } = req.body as {
+      email?: string;
+      password?: string;
+      username?: string;
+      phone?: string;
+      role_id?: string;
+      tenant_id?: string;
+    };
     if (!email || !password) {
       res.status(400).json({ message: 'Email and password are required' });
+      return;
+    }
+    if (!role_id || !tenant_id) {
+      res.status(400).json({ message: 'role_id and tenant_id are required' });
       return;
     }
     const existing = await User.findOne({ email: email.toLowerCase().trim() });
@@ -21,15 +33,19 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({ message: 'User already exists with this email' });
       return;
     }
+    const password_hash = await bcrypt.hash(password, 12);
     const user = await User.create({
       email: email.trim().toLowerCase(),
-      password,
-      name: name?.trim(),
+      password_hash,
+      username: username?.trim() || undefined,
+      phone: phone?.trim() || undefined,
+      role_id,
+      tenant_id,
     });
     const token = signToken(user._id.toString());
     res.status(201).json({
       token,
-      user: { id: user._id, email: user.email, name: user.name },
+      user: { id: user._id, email: user.email, username: user.username },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Registration failed';
@@ -44,7 +60,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({ message: 'Email and password are required' });
       return;
     }
-    const user = await User.findOne({ email: email.toLowerCase().trim() }).select('+password');
+    const user = await User.findOne({ email: email.toLowerCase().trim() }).select('+password_hash');
     if (!user || !(await user.comparePassword(password))) {
       res.status(401).json({ message: 'Invalid email or password' });
       return;
@@ -52,7 +68,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     const token = signToken(user._id.toString());
     res.json({
       token,
-      user: { id: user._id, email: user.email, name: user.name },
+      user: { id: user._id, email: user.email, username: user.username },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Login failed';
