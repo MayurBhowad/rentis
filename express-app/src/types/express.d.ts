@@ -11,7 +11,7 @@ declare global {
         is_active: boolean;
         is_verified: boolean;
         role_id: Types.ObjectId;
-        tenant_id: Types.ObjectId;
+        tenant_id?: Types.ObjectId;
         failed_login_attempts: number;
         locked_until?: Date;
         last_login_at?: Date;

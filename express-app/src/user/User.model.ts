@@ -10,7 +10,7 @@ export interface IUser {
   is_active: boolean;
   is_verified: boolean;
   role_id: mongoose.Types.ObjectId;
-  tenant_id: mongoose.Types.ObjectId;
+  tenant_id?: mongoose.Types.ObjectId;
   failed_login_attempts: number;
   locked_until?: Date;
   last_login_at?: Date;
@@ -69,7 +69,8 @@ const userSchema = new Schema<IUser, UserModel, IUserMethods>(
     tenant_id: {
       type: Schema.Types.ObjectId,
       ref: 'Tenant',
-      required: true,
+      required: false,
+      default: null,
     },
     failed_login_attempts: {
       type: Number,
