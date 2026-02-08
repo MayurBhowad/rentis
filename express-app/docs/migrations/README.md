@@ -66,3 +66,42 @@ Requires `MONGO_URI` in the environment (e.g. via `.env` or `dotenv`).
 ## migration_log
 
 The runner records each completed migration in the `migration_log` collection with `name` and `createdAt`. Do not edit this collection by hand unless you need to re-run a migration (remove its entry).
+
+---
+
+# Seeders
+
+Seeders feed **initial/reference data** (e.g. default roles, tenants). Run after migrations.
+
+## Commands
+
+- **Preview (no changes):** `npm run seed:preview` — lists pending seeders.
+- **Apply:** `npm run seed:run` — runs pending seeders and records them in `seed_log`.
+
+## Add a seeder
+
+1. **Create a file** in `src/utils/seeders/`, e.g. `002_tenants.ts`:
+   ```ts
+   import type { Connection } from 'mongoose';
+   import { Tenant } from '../../user/Tenant.model';
+
+   export const name = '002_tenants';
+   export const description = 'Seed default tenants';
+   export async function up(conn: Connection): Promise<void> {
+     const exists = await Tenant.exists({ slug: 'default' });
+     if (!exists) await Tenant.create({ name: 'Default', slug: 'default' });
+   }
+   ```
+
+2. **Register it** in `src/utils/seeders/index.ts`:
+   ```ts
+   import * as s002 from './002_tenants';
+   export const seeders: Seeder[] = [
+     { name: s001.name, description: s001.description, up: s001.up },
+     { name: s002.name, description: s002.description, up: s002.up },
+   ];
+   ```
+
+3. Run `npm run seed:preview` then `npm run seed:run`.
+
+Keep seeders **idempotent** (e.g. check by slug/unique key before insert) so re-running is safe. Completed seeders are stored in the `seed_log` collection.
