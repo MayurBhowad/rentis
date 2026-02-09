@@ -4,6 +4,7 @@ import cors from 'cors';
 import { connectDB } from './config/db';
 import authRoutes from './Auth/auth.routes';
 import userRoutes from './user/user.routes';
+import rentRoutes from './rent/rent.routes';
 
 connectDB();
 
@@ -13,6 +14,7 @@ app.use(express.json());
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api', rentRoutes);
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
