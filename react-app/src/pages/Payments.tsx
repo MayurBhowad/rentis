@@ -1,0 +1,68 @@
+import { useState } from 'react';
+import { useStore } from '../store/useStore';
+
+export function Payments() {
+  const tenants = useStore((s) => s.tenants);
+  const payments = useStore((s) => s.payments);
+  const addPayment = useStore((s) => s.addPayment);
+
+  const [tenantId, setTenantId] = useState('');
+  const [amount, setAmount] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const amt = Number(amount);
+    if (!tenantId || !amt || amt <= 0) return;
+    addPayment(tenantId, amt, date);
+    setAmount('');
+  };
+
+  const sortedPayments = [...payments].sort((a, b) => b.date.localeCompare(a.date));
+
+  return (
+    <div className="page">
+      <h1>Payments</h1>
+      <form onSubmit={handleSubmit} className="form card">
+        <h2>Add payment</h2>
+        <div className="form-row">
+          <label>Tenant</label>
+          <select value={tenantId} onChange={(e) => setTenantId(e.target.value)} required>
+            <option value="">Select tenant</option>
+            {tenants.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+        </div>
+        <div className="form-row">
+          <label>Amount (₹)</label>
+          <input type="number" min="1" value={amount} onChange={(e) => setAmount(e.target.value)} required />
+        </div>
+        <div className="form-row">
+          <label>Date</label>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+        </div>
+        <button type="submit">Record payment</button>
+      </form>
+      <h2>Payment history</h2>
+      <table className="table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Tenant</th>
+            <th>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sortedPayments.map((p) => (
+            <tr key={p.id}>
+              <td>{p.date}</td>
+              <td>{tenants.find((t) => t.id === p.tenantId)?.name ?? p.tenantId}</td>
+              <td>₹{p.amount.toLocaleString()}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
