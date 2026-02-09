@@ -1,9 +1,14 @@
 import { useStore } from '../store/useStore';
 
 export function Dashboard() {
+  const loading = useStore((s) => s.loading);
+  const error = useStore((s) => s.error);
   const totalDue = useStore((s) => s.totalDue());
   const totalCollectedThisMonth = useStore((s) => s.totalCollectedThisMonth());
   const overdueTenantCount = useStore((s) => s.overdueTenantCount());
+
+  if (loading) return <div className="page"><p>Loading...</p></div>;
+  if (error) return <div className="page"><p className="error">{error}</p></div>;
 
   return (
     <div className="page">

@@ -14,6 +14,7 @@ router.get('/properties', propertyController.list);
 router.post('/tenants', residentController.create);
 router.get('/tenants', residentController.list);
 router.get('/tenants/:id', residentController.getById);
+router.patch('/tenants/:id', residentController.update);
 
 router.post('/charges', chargeController.create);
 router.get('/charges', chargeController.list);

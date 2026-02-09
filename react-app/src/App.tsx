@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { Dashboard } from './pages/Dashboard';
@@ -7,9 +8,15 @@ import { TenantDetail } from './pages/TenantDetail';
 import { Payments } from './pages/Payments';
 import { Ledger } from './pages/Ledger';
 import { Reports } from './pages/Reports';
+import { useStore } from './store/useStore';
 import './App.css';
 
 function App() {
+  const loadAll = useStore((s) => s.loadAll);
+  useEffect(() => {
+    loadAll();
+  }, [loadAll]);
+
   return (
     <BrowserRouter>
       <div className="app">

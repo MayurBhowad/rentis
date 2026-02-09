@@ -4,6 +4,11 @@ import { useStore } from '../store/useStore';
 export function Tenants() {
   const tenants = useStore((s) => s.tenants);
   const properties = useStore((s) => s.properties);
+  const loading = useStore((s) => s.loading);
+  const error = useStore((s) => s.error);
+
+  if (loading) return <div className="page"><p>Loading...</p></div>;
+  if (error) return <div className="page"><p className="error">{error}</p></div>;
 
   return (
     <div className="page">

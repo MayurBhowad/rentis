@@ -1,152 +1,164 @@
 import { create } from 'zustand';
-import type { Property, Tenant, Charge, Payment, Allocation, ChargeType } from '../types';
-import { mockProperties, mockTenants, mockCharges, mockPayments, mockAllocations } from '../data/mockData';
-import {
-  getChargeBalance,
-  allocatePaymentFIFO,
-  getLedgerEntries,
-  getTotalDue,
-  getTotalCollectedInMonth,
-  getOverdueTenantIds,
-} from '../utils/ledger';
+import type { Property, Tenant, Charge, Payment, ChargeType } from '../types';
+import { api, mapProperty, mapTenant, mapCharge, mapPayment, type ApiReportSummary } from '../api/client';
+
+interface ReportSummaryState {
+  monthlyCollection: { month: string; total: number }[];
+  outstandingDues: { tenantId: string; amount: number }[];
+  propertyWiseIncome: { propertyId: string; total: number }[];
+}
 
 interface State {
   properties: Property[];
   tenants: Tenant[];
   charges: Charge[];
   payments: Payment[];
-  allocations: Allocation[];
-  addCharge: (tenantId: string, type: ChargeType, amount: number, period: string, dueDate: string) => void;
-  addPayment: (tenantId: string, amount: number, date: string) => void;
-  assignTenantToProperty: (tenantId: string, propertyId: string | null) => void;
+  reportSummary: ReportSummaryState | null;
+  loading: boolean;
+  error: string | null;
+  loadAll: () => Promise<void>;
+  setError: (msg: string | null) => void;
+  addCharge: (tenantId: string, type: ChargeType, amount: number, period: string, dueDate: string) => Promise<void>;
+  addPayment: (tenantId: string, amount: number, date: string) => Promise<void>;
+  assignTenantToProperty: (tenantId: string, propertyId: string | null) => Promise<void>;
   totalDue: () => number;
   totalCollectedThisMonth: () => number;
   overdueTenantCount: () => number;
-  getLedgerForTenant: (tenantId: string) => import('../types').LedgerEntry[];
-  getLedgerFiltered: (opts: { tenantId?: string; propertyId?: string; from?: string; to?: string }) => import('../types').LedgerEntry[];
   getMonthlyCollection: () => { month: string; total: number }[];
   getOutstandingDues: () => { tenantId: string; amount: number }[];
   getPropertyWiseIncome: () => { propertyId: string; total: number }[];
 }
 
-let chargeIdCounter = 1;
-let paymentIdCounter = 1;
+function normalizeReport(r: ApiReportSummary | null): ReportSummaryState {
+  if (!r) return { monthlyCollection: [], outstandingDues: [], propertyWiseIncome: [] };
+  return {
+    monthlyCollection: r.monthlyCollection ?? [],
+    outstandingDues: (r.outstandingDues ?? []).map((d) => ({ tenantId: d.residentId, amount: d.amount })),
+    propertyWiseIncome: r.propertyWiseIncome ?? [],
+  };
+}
 
 export const useStore = create<State>((set, get) => ({
-  properties: mockProperties,
-  tenants: mockTenants,
-  charges: mockCharges,
-  payments: mockPayments,
-  allocations: mockAllocations,
+  properties: [],
+  tenants: [],
+  charges: [],
+  payments: [],
+  reportSummary: null,
+  loading: false,
+  error: null,
 
-  addCharge: (tenantId, type, amount, period, dueDate) => {
-    const id = `c-new-${chargeIdCounter++}`;
-    const charge: Charge = {
-      id,
-      tenantId,
-      type,
-      amount,
-      period,
-      dueDate,
-      createdAt: new Date().toISOString(),
-    };
-    set((s) => ({ charges: [...s.charges, charge] }));
+  loadAll: async () => {
+    set({ loading: true, error: null });
+    try {
+      const [properties, tenants, charges, payments, reportSummary] = await Promise.all([
+        api.getProperties(),
+        api.getTenants(),
+        api.getCharges(),
+        api.getPayments(),
+        api.getReportSummary(),
+      ]);
+      set({
+        properties: properties.map(mapProperty),
+        tenants: tenants.map(mapTenant),
+        charges: charges.map(mapCharge),
+        payments: payments.map(mapPayment),
+        reportSummary: normalizeReport(reportSummary),
+        loading: false,
+        error: null,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load data';
+      set({ loading: false, error: message });
+    }
   },
 
-  addPayment: (tenantId, amount, date) => {
-    const id = `pm-new-${paymentIdCounter++}`;
-    const payment: Payment = {
-      id,
-      tenantId,
-      amount,
-      date,
-      createdAt: new Date().toISOString(),
-    };
-    set((s) => {
-      const newAllocations = allocatePaymentFIFO(payment, [...s.charges], s.allocations);
-      return {
-        payments: [...s.payments, payment],
-        allocations: [...s.allocations, ...newAllocations],
-      };
-    });
+  setError: (msg) => set({ error: msg }),
+
+  addCharge: async (tenantId, type, amount, period, dueDate) => {
+    set({ error: null });
+    try {
+      await api.postCharge({
+        tenant_id: tenantId,
+        type,
+        amount,
+        period_from: period,
+        period_to: period,
+        due_date: `${dueDate}T00:00:00.000Z`,
+      });
+      const [charges, reportSummary] = await Promise.all([api.getCharges(), api.getReportSummary()]);
+      set((s) => ({
+        charges: charges.map(mapCharge),
+        reportSummary: normalizeReport(reportSummary),
+      }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to add charge';
+      set({ error: message });
+      throw err;
+    }
   },
 
-  assignTenantToProperty: (tenantId, propertyId) => {
-    set((s) => ({
-      tenants: s.tenants.map((t) => (t.id === tenantId ? { ...t, propertyId } : t)),
-    }));
+  addPayment: async (tenantId, amount, date) => {
+    set({ error: null });
+    try {
+      await api.postPayment({ tenant_id: tenantId, amount, date });
+      const [payments, charges, reportSummary] = await Promise.all([
+        api.getPayments(),
+        api.getCharges(),
+        api.getReportSummary(),
+      ]);
+      set((s) => ({
+        payments: payments.map(mapPayment),
+        charges: charges.map(mapCharge),
+        reportSummary: normalizeReport(reportSummary),
+      }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to record payment';
+      set({ error: message });
+      throw err;
+    }
+  },
+
+  assignTenantToProperty: async (tenantId, propertyId) => {
+    set({ error: null });
+    try {
+      await api.patchTenant(tenantId, { propertyId });
+      const tenants = await api.getTenants();
+      set({ tenants: tenants.map(mapTenant) });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to assign tenant';
+      set({ error: message });
+      throw err;
+    }
   },
 
   totalDue: () => {
-    const { charges, allocations } = get();
-    return getTotalDue(charges, allocations);
+    const r = get().reportSummary;
+    if (!r) return 0;
+    return r.outstandingDues.reduce((s, d) => s + d.amount, 0);
   },
 
   totalCollectedThisMonth: () => {
-    const { payments } = get();
+    const r = get().reportSummary;
+    if (!r) return 0;
     const now = new Date();
     const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    return getTotalCollectedInMonth(payments, ym);
+    const row = r.monthlyCollection.find((x) => x.month === ym);
+    return row ? row.total : 0;
   },
 
   overdueTenantCount: () => {
-    const { charges, allocations } = get();
+    const { charges } = get();
     const today = new Date().toISOString().slice(0, 10);
-    return getOverdueTenantIds(charges, allocations, today).size;
-  },
-
-  getLedgerForTenant: (tenantId) => {
-    const { charges, payments, allocations } = get();
-    return getLedgerEntries(tenantId, charges, payments, allocations);
-  },
-
-  getLedgerFiltered: (opts) => {
-    const { tenants, charges, payments, allocations } = get();
-    const tenantIds = opts.tenantId
-      ? [opts.tenantId]
-      : opts.propertyId
-        ? tenants.filter((t) => t.propertyId === opts.propertyId).map((t) => t.id)
-        : tenants.map((t) => t.id);
-    const allEntries: import('../types').LedgerEntry[] = [];
-    for (const tid of tenantIds) {
-      allEntries.push(...getLedgerEntries(tid, charges, payments, allocations));
-    }
-    let list = allEntries.sort((a, b) => a.date.localeCompare(b.date));
-    if (opts.from) list = list.filter((e) => e.date >= opts.from!);
-    if (opts.to) list = list.filter((e) => e.date <= opts.to!);
-    return list;
-  },
-
-  getMonthlyCollection: () => {
-    const { payments } = get();
-    const byMonth = new Map<string, number>();
-    for (const p of payments) {
-      const ym = p.date.slice(0, 7);
-      byMonth.set(ym, (byMonth.get(ym) ?? 0) + p.amount);
-    }
-    return Array.from(byMonth.entries())
-      .map(([month, total]) => ({ month, total }))
-      .sort((a, b) => a.month.localeCompare(b.month));
-  },
-
-  getOutstandingDues: () => {
-    const { charges, allocations, tenants } = get();
-    const byTenant = new Map<string, number>();
+    const set = new Set<string>();
     for (const c of charges) {
-      const bal = getChargeBalance(c, allocations);
-      if (bal > 0) byTenant.set(c.tenantId, (byTenant.get(c.tenantId) ?? 0) + bal);
+      if ((c.status === 'PENDING' || c.status === 'PARTIAL') && c.dueDate < today) {
+        set.add(c.tenantId);
+      }
     }
-    return Array.from(byTenant.entries()).map(([tenantId, amount]) => ({ tenantId, amount }));
+    return set.size;
   },
 
-  getPropertyWiseIncome: () => {
-    const { payments, tenants } = get();
-    const byProp = new Map<string, number>();
-    for (const p of payments) {
-      const t = tenants.find((x) => x.id === p.tenantId);
-      const pid = t?.propertyId ?? 'unassigned';
-      byProp.set(pid, (byProp.get(pid) ?? 0) + p.amount);
-    }
-    return Array.from(byProp.entries()).map(([propertyId, total]) => ({ propertyId, total }));
-  },
+  getMonthlyCollection: () => get().reportSummary?.monthlyCollection ?? [],
+  getOutstandingDues: () => get().reportSummary?.outstandingDues ?? [],
+  getPropertyWiseIncome: () => get().reportSummary?.propertyWiseIncome ?? [],
 }));

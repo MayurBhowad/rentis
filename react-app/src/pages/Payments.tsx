@@ -5,20 +5,31 @@ export function Payments() {
   const tenants = useStore((s) => s.tenants);
   const payments = useStore((s) => s.payments);
   const addPayment = useStore((s) => s.addPayment);
+  const loading = useStore((s) => s.loading);
+  const error = useStore((s) => s.error);
 
   const [tenantId, setTenantId] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amt = Number(amount);
     if (!tenantId || !amt || amt <= 0) return;
-    addPayment(tenantId, amt, date);
-    setAmount('');
+    setSubmitting(true);
+    try {
+      await addPayment(tenantId, amt, date);
+      setAmount('');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const sortedPayments = [...payments].sort((a, b) => b.date.localeCompare(a.date));
+
+  if (loading) return <div className="page"><p>Loading...</p></div>;
+  if (error) return <div className="page"><p className="error">{error}</p></div>;
 
   return (
     <div className="page">
@@ -42,7 +53,7 @@ export function Payments() {
           <label>Date</label>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
         </div>
-        <button type="submit">Record payment</button>
+        <button type="submit" disabled={submitting}>{submitting ? 'Recording…' : 'Record payment'}</button>
       </form>
       <h2>Payment history</h2>
       <table className="table">

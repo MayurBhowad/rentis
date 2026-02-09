@@ -12,13 +12,16 @@ export interface Tenant {
   propertyId: string | null;
 }
 
+export type ChargeStatus = 'PENDING' | 'PARTIAL' | 'PAID';
+
 export interface Charge {
   id: string;
   tenantId: string;
   type: ChargeType;
   amount: number;
-  period: string; // e.g. "2025-01"
-  dueDate: string; // ISO date
+  period: string;
+  dueDate: string;
+  status?: ChargeStatus;
   createdAt: string;
 }
 

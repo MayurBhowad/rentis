@@ -146,3 +146,4 @@ body {
   margin-bottom: 1rem;
 }
 .filters .form-row { margin-bottom: 0; }
+.error { color: #c00; }

@@ -34,3 +34,26 @@ export async function create(req: Request, res: Response): Promise<void> {
   const doc = await Resident.create(data);
   res.status(201).json(doc);
 }
+
+export async function update(req: Request, res: Response): Promise<void> {
+  const id = req.params.id;
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    res.status(400).json({ message: 'Invalid id' });
+    return;
+  }
+  const { propertyId } = req.body as { propertyId?: string | null };
+  const update: { propertyId: mongoose.Types.ObjectId | null } = { propertyId: null };
+  if (propertyId !== undefined && propertyId !== null && propertyId !== '') {
+    if (!mongoose.Types.ObjectId.isValid(propertyId)) {
+      res.status(400).json({ message: 'Invalid propertyId' });
+      return;
+    }
+    update.propertyId = new mongoose.Types.ObjectId(propertyId);
+  }
+  const doc = await Resident.findByIdAndUpdate(id, update, { new: true }).populate('propertyId', 'name address').lean();
+  if (!doc) {
+    res.status(404).json({ message: 'Tenant not found' });
+    return;
+  }
+  res.json(doc);
+}
