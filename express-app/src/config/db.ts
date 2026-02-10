@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { appLogger } from './logger';
 
 export const connectDB = async (): Promise<void> => {
   try {
@@ -7,10 +8,18 @@ export const connectDB = async (): Promise<void> => {
       throw new Error('MONGO_URI is not defined in environment');
     }
     const conn = await mongoose.connect(uri);
-    console.log(`MongoDB connected: ${conn.connection.host}`);
+    appLogger.info({
+      msg: 'MongoDB connected',
+      event: 'db_connected',
+      host: conn.connection.host,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    console.error('MongoDB connection error:', message);
+    appLogger.error({
+      msg: 'MongoDB connection error',
+      event: 'db_connection_failure',
+      error: message,
+    });
     process.exit(1);
   }
 };

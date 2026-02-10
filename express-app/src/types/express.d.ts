@@ -3,6 +3,8 @@ import type { Types } from 'mongoose';
 declare global {
   namespace Express {
     interface Request {
+      requestId?: string;
+      requestStartTime?: number;
       user?: {
         _id: Types.ObjectId;
         email: string;
