@@ -19,6 +19,7 @@ interface State {
   loadAll: () => Promise<void>;
   setError: (msg: string | null) => void;
   addProperty: (name: string, address?: string) => Promise<void>;
+  addTenant: (name: string, propertyId?: string | null) => Promise<void>;
   addCharge: (tenantId: string, type: ChargeType, amount: number, period: string, dueDate: string) => Promise<void>;
   addPayment: (tenantId: string, amount: number, date: string) => Promise<void>;
   assignTenantToProperty: (tenantId: string, propertyId: string | null) => Promise<void>;
@@ -86,6 +87,23 @@ export const useStore = create<State>((set, get) => ({
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to add property';
+      set({ error: message });
+      throw err;
+    }
+  },
+
+  addTenant: async (name, propertyId) => {
+    set({ error: null });
+    try {
+      await api.postTenant({ name: name.trim(), propertyId: propertyId || undefined });
+      const tenants = await api.getTenants();
+      const reportSummary = await api.getReportSummary();
+      set({
+        tenants: tenants.map(mapTenant),
+        reportSummary: normalizeReport(reportSummary),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to add tenant';
       set({ error: message });
       throw err;
     }
